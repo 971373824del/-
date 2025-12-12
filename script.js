@@ -416,9 +416,19 @@ class ScientificLiteracyEvaluation {
     startTest() {
         if (!this.currentStudent) return;
 
-        this.currentQuestionIndex = 0;
-        this.answers = [];
-        this.testCompleted = false;
+        // 检查是否有已保存的测试进度
+        const savedProgress = localStorage.getItem(`testProgress_${this.currentStudent.name}_${this.currentStudent.testDate}`);
+        
+        if (savedProgress) {
+            const progress = JSON.parse(savedProgress);
+            this.currentQuestionIndex = progress.currentQuestionIndex;
+            this.answers = progress.answers;
+            this.testCompleted = false;
+        } else {
+            this.currentQuestionIndex = 0;
+            this.answers = [];
+            this.testCompleted = false;
+        }
         
         // 显示测试页面
         this.showSection('test');
@@ -426,6 +436,20 @@ class ScientificLiteracyEvaluation {
         // 加载当前年级的问题
         this.displayQuestion();
         this.updateProgress();
+    }
+
+    saveTestProgress() {
+        if (!this.currentStudent) return;
+        
+        // 只有在测试未完成时保存进度
+        if (!this.testCompleted) {
+            const progress = {
+                currentQuestionIndex: this.currentQuestionIndex,
+                answers: this.answers
+            };
+            
+            localStorage.setItem(`testProgress_${this.currentStudent.name}_${this.currentStudent.testDate}`, JSON.stringify(progress));
+        }
     }
 
     displayQuestion() {
@@ -452,6 +476,8 @@ class ScientificLiteracyEvaluation {
         questionContainer.querySelectorAll('input[type="radio"]').forEach(input => {
             input.addEventListener('change', (e) => {
                 this.answers[this.currentQuestionIndex] = parseInt(e.target.value);
+                // 保存当前测试进度
+                this.saveTestProgress();
             });
         });
 
@@ -488,6 +514,9 @@ class ScientificLiteracyEvaluation {
             alert('请选择一个答案！');
             return;
         }
+        
+        // 保存当前测试进度
+        this.saveTestProgress();
         
         if (this.currentQuestionIndex < this.testData[this.currentStudent.grade].length - 1) {
             this.currentQuestionIndex++;
@@ -530,6 +559,9 @@ class ScientificLiteracyEvaluation {
         // 显示测评报告
         this.displayResults(results);
         this.showSection('results');
+        
+        // 测试完成后，清除保存的测试进度
+        localStorage.removeItem(`testProgress_${this.currentStudent.name}_${this.currentStudent.testDate}`);
     }
 
     calculateResults() {
@@ -930,6 +962,7 @@ class ScientificLiteracyEvaluation {
                 <td style="color: ${result.results.comprehensiveGrade.color};">${result.results.comprehensiveGrade.grade}</td>
                 <td>
                     <button class="btn btn-sm btn-primary" onclick="evaluation.showStudentReport(${index})">查看报告</button>
+                    <button class="btn btn-sm btn-danger" onclick="evaluation.deleteStudentData(${index})">删除数据</button>
                 </td>
             `;
             tableBody.appendChild(row);
@@ -1000,6 +1033,17 @@ class ScientificLiteracyEvaluation {
         if (confirm('确定要清空所有测评数据吗？此操作不可恢复！')) {
             localStorage.removeItem('studentResults');
             alert('所有数据已清空！');
+            this.updateAdminStats();
+            this.loadStudentDataTable();
+        }
+    }
+
+    deleteStudentData(index) {
+        if (confirm('确定要删除这条数据吗？此操作不可恢复！')) {
+            let allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+            allResults.splice(index, 1);
+            localStorage.setItem('studentResults', JSON.stringify(allResults));
+            alert('数据已删除！');
             this.updateAdminStats();
             this.loadStudentDataTable();
         }
