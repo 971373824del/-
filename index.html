@@ -6,6 +6,8 @@
     <title>惠王中心小学学生科学素养测评系统</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -151,6 +153,9 @@
 
                     <div class="analysis-report">
                         <h3>素养分析报告</h3>
+                        <div style="text-align: right; margin-bottom: 10px;">
+                            <button id="download-report-btn" class="btn btn-sm btn-primary">下载报告</button>
+                        </div>
                         <div id="analysis-report">
                             <p>请先完成测评并生成报告...</p>
                         </div>
@@ -197,9 +202,11 @@
                         <!-- 数据管理 -->
                         <div id="data-management" class="admin-tab active">
                             <h4>学生数据管理</h4>
-                            <div class="button-group">
-                                <button id="download-data-btn" class="btn">下载所有数据</button>
-                                <button id="clear-data-btn" class="btn btn-warning">清空数据</button>
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <button id="import-data-btn" class="btn btn-sm btn-success">导入数据</button>
+                                <input type="file" id="data-file-input" accept=".json" style="display: none;">
+                                <button id="export-data-btn" class="btn btn-sm btn-primary" style="margin-left: 10px;">导出数据</button>
+                                <button id="clear-data-btn" class="btn btn-sm btn-warning" style="margin-left: 10px;">清空数据</button>
                             </div>
                             <div class="data-table-container">
                                 <table id="admin-data-table">

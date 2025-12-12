@@ -369,9 +369,13 @@ class ScientificLiteracyEvaluation {
         document.getElementById('back-to-login').addEventListener('click', () => this.showAdminLogin());
         
         // 后台管理功能
-        document.getElementById('download-data-btn').addEventListener('click', () => this.downloadAllData());
+        document.getElementById('export-data-btn').addEventListener('click', () => this.exportAllData());
+        document.getElementById('import-data-btn').addEventListener('click', () => this.importData());
         document.getElementById('clear-data-btn').addEventListener('click', () => this.clearAllData());
         document.getElementById('change-password-btn').addEventListener('click', () => this.changeAdminPassword());
+        
+        // 文件输入事件
+        document.getElementById('data-file-input').addEventListener('change', (e) => this.handleFileImport(e));
         
         // 管理员标签页切换
         document.querySelectorAll('.admin-nav-btn').forEach(btn => {
@@ -381,6 +385,9 @@ class ScientificLiteracyEvaluation {
         // 班级/年级分析报告功能
         document.getElementById('generate-analysis-btn').addEventListener('click', () => this.generateAnalysisReport());
         document.getElementById('download-analysis-btn').addEventListener('click', () => this.downloadAnalysisReport());
+        
+        // 单个学生报告下载功能
+        document.getElementById('download-report-btn').addEventListener('click', () => this.downloadStudentReport());
     }
 
     setDefaultDate() {
@@ -981,19 +988,40 @@ class ScientificLiteracyEvaluation {
                 testDate: studentResult.testDate
             };
             this.displayResults(studentResult.results);
+            this.generateAnalysisReport(studentResult.results);
             this.showSection('results');
         }
     }
 
-    downloadAllData() {
+    // 导出所有数据（支持CSV和JSON格式）
+    exportAllData() {
         const allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
         
         if (allResults.length === 0) {
-            alert('没有数据可以下载！');
+            alert('没有数据可以导出！');
             return;
         }
+        
+        // 让用户选择导出格式
+        const format = prompt('请选择导出格式：\n1. CSV\n2. JSON', '1');
+        
+        if (!format || (format !== '1' && format !== '2')) {
+            return;
+        }
+        
+        const exportDate = new Date().toISOString().split('T')[0];
+        
+        if (format === '1') {
+            // 导出为CSV格式
+            this.exportDataAsCSV(allResults, exportDate);
+        } else {
+            // 导出为JSON格式
+            this.exportDataAsJSON(allResults, exportDate);
+        }
+    }
 
-        // 生成CSV文件
+    // 将数据导出为CSV格式
+    exportDataAsCSV(allResults, exportDate) {
         const headers = ['姓名', '年级', '班级', '测评日期', '综合得分', '等级', '科学知识得分', '科学知识等级', '科学探究能力得分', '科学探究能力等级', '科学态度与情感得分', '科学态度与情感等级', '科学、技术与社会的关系得分', '科学、技术与社会的关系等级'];
         const rows = allResults.map(result => [
             result.name,
@@ -1022,11 +1050,142 @@ class ScientificLiteracyEvaluation {
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
-        link.setAttribute('download', `科学素养测评数据_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute('download', `科学素养测评数据_${exportDate}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    // 将数据导出为JSON格式
+    exportDataAsJSON(allResults, exportDate) {
+        // 创建包含元数据的完整JSON对象
+        const exportData = {
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            totalStudents: allResults.length,
+            data: allResults
+        };
+        
+        const jsonContent = JSON.stringify(exportData, null, 2);
+        
+        // 创建下载链接
+        const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `科学素养测评数据_${exportDate}.json`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // 导入数据功能
+    importData() {
+        document.getElementById('data-file-input').click();
+    }
+
+    // 处理文件导入
+    handleFileImport(event) {
+        const file = event.target.files[0];
+        
+        if (!file) {
+            return;
+        }
+        
+        if (!file.name.endsWith('.json')) {
+            alert('请选择JSON格式的文件！');
+            return;
+        }
+        
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                const importData = JSON.parse(e.target.result);
+                
+                // 验证导入数据的格式
+                if (!this.validateImportData(importData)) {
+                    alert('导入数据格式不正确！');
+                    return;
+                }
+                
+                // 合并导入数据与现有数据
+                this.mergeImportData(importData.data);
+                
+                // 更新界面
+                this.loadStudentDataTable();
+                this.updateStatistics();
+                
+                alert('数据导入成功！导入了' + importData.data.length + '条记录。');
+            } catch (error) {
+                console.error('导入数据错误：', error);
+                alert('导入数据错误！请检查文件格式。');
+            }
+        };
+        
+        reader.readAsText(file);
+        
+        // 清空文件输入
+        event.target.value = '';
+    }
+
+    // 验证导入数据的格式
+    validateImportData(importData) {
+        if (!importData || !Array.isArray(importData.data)) {
+            return false;
+        }
+        
+        // 验证至少有一条记录
+        if (importData.data.length === 0) {
+            return false;
+        }
+        
+        // 验证每条记录的格式
+        const requiredFields = ['name', 'grade', 'className', 'testDate', 'results'];
+        
+        for (const student of importData.data) {
+            for (const field of requiredFields) {
+                if (!student.hasOwnProperty(field)) {
+                    return false;
+                }
+            }
+            
+            // 验证results对象
+            const requiredResults = ['comprehensiveScore', 'comprehensiveGrade', 'dimensionScores', 'dimensionGrades'];
+            for (const field of requiredResults) {
+                if (!student.results.hasOwnProperty(field)) {
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    }
+
+    // 合并导入数据与现有数据
+    mergeImportData(importedData) {
+        const allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+        
+        // 使用Set来避免重复数据（基于姓名、年级、班级和测评日期的组合）
+        const existingRecords = new Set();
+        
+        allResults.forEach(record => {
+            const key = `${record.name}_${record.grade}_${record.className}_${record.testDate}`;
+            existingRecords.add(key);
+        });
+        
+        // 添加新记录
+        importedData.forEach(record => {
+            const key = `${record.name}_${record.grade}_${record.className}_${record.testDate}`;
+            if (!existingRecords.has(key)) {
+                allResults.push(record);
+            }
+        });
+        
+        // 保存合并后的数据
+        localStorage.setItem('studentResults', JSON.stringify(allResults));
     }
 
     clearAllData() {
@@ -1511,6 +1670,148 @@ class ScientificLiteracyEvaluation {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    // 下载单个学生的分析报告
+    downloadStudentReport() {
+        const analysisReport = document.getElementById('analysis-report');
+        
+        if (!this.currentStudent || !analysisReport.innerHTML || analysisReport.innerHTML.includes('请先完成测评并生成报告')) {
+            alert('请先完成测评并生成报告！');
+            return;
+        }
+        
+        // 让用户选择下载格式
+        const format = prompt('请选择下载格式：\n1. Word\n2. PDF', '1');
+        
+        if (!format || (format !== '1' && format !== '2')) {
+            return;
+        }
+        
+        const studentName = this.currentStudent.name;
+        const testDate = this.currentStudent.testDate;
+        const filename = `学生_${studentName}_科学素养测评报告_${testDate.replace(/[\/]/g, '-')}`;
+        
+        if (format === '1') {
+            // 下载为Word格式
+            this.downloadReportAsWord(analysisReport, filename);
+        } else {
+            // 下载为PDF格式
+            this.downloadReportAsPDF(analysisReport, filename);
+        }
+    }
+
+    // 将分析报告下载为Word文档
+    downloadReportAsWord(reportElement, filename) {
+        const studentInfo = document.querySelector('.student-info-display');
+        const comprehensiveResult = document.querySelector('.comprehensive-result');
+        const detailedResults = document.querySelector('.detailed-results');
+        
+        // 创建完整的HTML内容
+        const fullContent = `
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>科学素养测评报告</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h2, h3 { color: #333; }
+                    .student-info-display, .comprehensive-result, .detailed-results, .analysis-report {
+                        margin-bottom: 30px;
+                        padding: 15px;
+                        border: 1px solid #ddd;
+                        border-radius: 5px;
+                    }
+                    .info-item { margin: 10px 0; }
+                    .score-display { display: flex; gap: 20px; }
+                    .score-item { margin: 10px 0; }
+                    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                </style>
+            </head>
+            <body>
+                <h2>科学素养测评报告</h2>
+                ${studentInfo ? studentInfo.outerHTML : ''}
+                ${comprehensiveResult ? comprehensiveResult.outerHTML : ''}
+                ${detailedResults ? detailedResults.outerHTML : ''}
+                <div class="analysis-report">
+                    <h3>素养分析报告</h3>
+                    ${reportElement.innerHTML}
+                </div>
+            </body>
+            </html>
+        `;
+        
+        // 创建下载链接
+        const blob = new Blob(['\ufeff' + fullContent], { type: 'application/msword;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${filename}.doc`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // 将分析报告下载为PDF文档
+    downloadReportAsPDF(reportElement, filename) {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // 获取报告内容
+        const studentInfo = document.querySelector('.student-info-display');
+        const comprehensiveResult = document.querySelector('.comprehensive-result');
+        const detailedResults = document.querySelector('.detailed-results');
+        
+        // 创建一个临时容器来合并所有内容
+        const tempContainer = document.createElement('div');
+        tempContainer.style.padding = '20px';
+        tempContainer.innerHTML = `
+            <h2>科学素养测评报告</h2>
+            ${studentInfo ? studentInfo.outerHTML : ''}
+            ${comprehensiveResult ? comprehensiveResult.outerHTML : ''}
+            ${detailedResults ? detailedResults.outerHTML : ''}
+            <div class="analysis-report">
+                <h3>素养分析报告</h3>
+                ${reportElement.innerHTML}
+            </div>
+        `;
+        
+        document.body.appendChild(tempContainer);
+        
+        // 使用html2canvas将HTML转换为图片
+        html2canvas(tempContainer, {
+            scale: 2, // 提高清晰度
+            useCORS: true
+        }).then(canvas => {
+            // 将canvas添加到PDF
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 210; // A4宽度，单位mm
+            const pageHeight = 297; // A4高度，单位mm
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+            
+            // 添加第一页
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+            
+            // 处理多页
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+            
+            // 下载PDF
+            pdf.save(`${filename}.pdf`);
+            
+            // 移除临时容器
+            document.body.removeChild(tempContainer);
+        });
     }
 }
 
