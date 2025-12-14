@@ -539,7 +539,7 @@ class ScientificLiteracyEvaluation {
         document.getElementById('total-questions').textContent = this.testData[this.currentStudent.grade].length;
     }
 
-    submitTest() {
+    async submitTest() {
         if (!this.answers[this.currentQuestionIndex]) {
             alert('请选择一个答案！');
             return;
@@ -558,10 +558,8 @@ class ScientificLiteracyEvaluation {
             timestamp: Date.now()
         };
 
-        // 保存到localStorage
-        let allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
-        allResults.push(studentResult);
-        localStorage.setItem('studentResults', JSON.stringify(allResults));
+        // 保存到服务器
+        await this.saveStudentData(studentResult);
 
         // 显示测评报告
         this.displayResults(results);
@@ -712,6 +710,70 @@ class ScientificLiteracyEvaluation {
                 }
             }
         });
+    }
+
+    // 与数据服务器通信的基础方法
+    async sendRequest(url, method = 'GET', data = null) {
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        };
+        
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+        
+        try {
+            const response = await fetch(url, options);
+            return await response.json();
+        } catch (error) {
+            console.error('服务器通信错误:', error);
+            return null;
+        }
+    }
+
+    // 获取所有学生数据
+    async getAllStudentData() {
+        const data = await this.sendRequest('http://localhost:8002');
+        return data || JSON.parse(localStorage.getItem('studentResults') || '[]');
+    }
+
+    // 保存学生数据
+    async saveStudentData(studentData) {
+        const result = await this.sendRequest('http://localhost:8002', 'POST', studentData);
+        if (result && result.success) {
+            return true;
+        } else {
+            // 服务器保存失败时，回退到localStorage
+            let allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+            allResults.push(studentData);
+            localStorage.setItem('studentResults', JSON.stringify(allResults));
+            return false;
+        }
+    }
+
+    // 删除学生数据
+    async deleteStudentData(index) {
+        const allResults = await this.getAllStudentData();
+        if (index >= 0 && index < allResults.length) {
+            const studentData = allResults[index];
+            const result = await this.sendRequest('http://localhost:8002', 'DELETE', studentData);
+            
+            if (result && result.success) {
+                this.loadStudentDataTable();
+                this.updateAdminStats();
+                alert('数据删除成功！');
+            } else {
+                // 服务器删除失败时，回退到localStorage
+                allResults.splice(index, 1);
+                localStorage.setItem('studentResults', JSON.stringify(allResults));
+                this.loadStudentDataTable();
+                this.updateAdminStats();
+                alert('数据删除成功！');
+            }
+        }
     }
 
     generateAnalysisReport(results) {
@@ -952,8 +1014,8 @@ class ScientificLiteracyEvaluation {
         });
     }
 
-    loadStudentDataTable() {
-        const allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+    async loadStudentDataTable() {
+        const allResults = await this.getAllStudentData();
         const tableBody = document.querySelector('#admin-data-table tbody');
         
         tableBody.innerHTML = '';
@@ -976,8 +1038,8 @@ class ScientificLiteracyEvaluation {
         });
     }
 
-    showStudentReport(index) {
-        const allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+    async showStudentReport(index) {
+        const allResults = await this.getAllStudentData();
         const studentResult = allResults[index];
         
         if (studentResult) {
@@ -990,12 +1052,19 @@ class ScientificLiteracyEvaluation {
             this.displayResults(studentResult.results);
             this.generateAnalysisReport(studentResult.results);
             this.showSection('results');
+            
+            // 确保分析报告容器有内容
+            const reportContainer = document.getElementById('analysis-report');
+            if (!reportContainer.innerHTML || reportContainer.innerHTML.includes('请先完成测评并生成报告')) {
+                console.log('重新生成分析报告...');
+                this.generateAnalysisReport(studentResult.results);
+            }
         }
     }
 
     // 导出所有数据（支持CSV和JSON格式）
-    exportAllData() {
-        const allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+    async exportAllData() {
+        const allResults = await this.getAllStudentData();
         
         if (allResults.length === 0) {
             alert('没有数据可以导出！');
@@ -1165,33 +1234,45 @@ class ScientificLiteracyEvaluation {
     }
 
     // 合并导入数据与现有数据
-    mergeImportData(importedData) {
-        const allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+    async mergeImportData(importedData) {
+        const allResults = await this.getAllStudentData();
         
-        // 使用Set来避免重复数据（基于姓名、年级、班级和测评日期的组合）
-        const existingRecords = new Set();
+        // 使用Map来避免重复数据并提高查找效率
+        const existingRecords = new Map();
         
         allResults.forEach(record => {
             const key = `${record.name}_${record.grade}_${record.className}_${record.testDate}`;
-            existingRecords.add(key);
+            existingRecords.set(key, true);
         });
         
         // 添加新记录
+        let importedCount = 0;
+        const newRecords = [];
         importedData.forEach(record => {
             const key = `${record.name}_${record.grade}_${record.className}_${record.testDate}`;
             if (!existingRecords.has(key)) {
                 allResults.push(record);
+                newRecords.push(record);
+                existingRecords.set(key, true);
+                importedCount++;
             }
         });
         
-        // 保存合并后的数据
+        // 保存合并后的数据到本地
         localStorage.setItem('studentResults', JSON.stringify(allResults));
+        
+        // 保存新记录到服务器
+        for (const record of newRecords) {
+            await this.saveStudentData(record);
+        }
+        
+        console.log(`成功导入${importedCount}条新记录，跳过${importedData.length - importedCount}条重复记录`);
     }
 
     clearAllData() {
-        if (confirm('确定要清空所有测评数据吗？此操作不可恢复！')) {
+        if (confirm('确定要清空本地所有测评数据吗？此操作不可恢复，但不会影响服务器数据！')) {
             localStorage.removeItem('studentResults');
-            alert('所有数据已清空！');
+            alert('本地所有数据已清空！');
             this.updateAdminStats();
             this.loadStudentDataTable();
         }
@@ -1757,6 +1838,12 @@ class ScientificLiteracyEvaluation {
 
     // 将分析报告下载为PDF文档
     downloadReportAsPDF(reportElement, filename) {
+        // 确保jsPDF和html2canvas可用
+        if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
+            alert('PDF生成所需的库未加载完成，请稍后重试！');
+            return;
+        }
+        
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         
@@ -1768,6 +1855,8 @@ class ScientificLiteracyEvaluation {
         // 创建一个临时容器来合并所有内容
         const tempContainer = document.createElement('div');
         tempContainer.style.padding = '20px';
+        tempContainer.style.width = '210mm'; // A4宽度
+        tempContainer.style.background = 'white';
         tempContainer.innerHTML = `
             <h2>科学素养测评报告</h2>
             ${studentInfo ? studentInfo.outerHTML : ''}
@@ -1784,7 +1873,8 @@ class ScientificLiteracyEvaluation {
         // 使用html2canvas将HTML转换为图片
         html2canvas(tempContainer, {
             scale: 2, // 提高清晰度
-            useCORS: true
+            useCORS: true,
+            backgroundColor: '#ffffff'
         }).then(canvas => {
             // 将canvas添加到PDF
             const imgData = canvas.toDataURL('image/png');
@@ -1806,10 +1896,15 @@ class ScientificLiteracyEvaluation {
                 heightLeft -= pageHeight;
             }
             
-            // 下载PDF
+            // 保存PDF
             pdf.save(`${filename}.pdf`);
             
-            // 移除临时容器
+            // 清理临时容器
+            document.body.removeChild(tempContainer);
+        }).catch(error => {
+            console.error('PDF生成错误:', error);
+            alert('PDF生成失败，请重试！');
+            // 清理临时容器
             document.body.removeChild(tempContainer);
         });
     }
