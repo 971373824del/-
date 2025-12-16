@@ -1,4 +1,27 @@
 // 惠王中心小学学生科学素养测评系统
+
+// 引入Firebase SDK
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics.js";
+
+// Firebase配置信息（已替换为实际配置）
+const firebaseConfig = {
+    apiKey: "AIzaSyCCJvOhjtIPjWX1tJ4Olb8h0AznLHSK-6g",
+    authDomain: "kexuesuyangceping.firebaseapp.com",
+    databaseURL: "https://kexuesuyangceping-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "kexuesuyangceping",
+    storageBucket: "kexuesuyangceping.firebasestorage.app",
+    messagingSenderId: "257622879070",
+    appId: "1:257622879070:web:362d87f7d98f24d6413dcf",
+    measurementId: "G-8VZ4RWHLNG"
+};
+
+// 初始化Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const analytics = getAnalytics(app);
+
 class ScientificLiteracyEvaluation {
     constructor() {
         this.currentStudent = null;
@@ -7,6 +30,11 @@ class ScientificLiteracyEvaluation {
         this.testCompleted = false;
         this.adminLoggedIn = false;
         this.testData = this.generateGradeBasedQuestions();
+        
+        // 初始化Firebase引用
+        this.firestore = db;
+        this.studentsCollection = collection(db, 'students');
+        
         this.init();
     }
 
@@ -818,31 +846,31 @@ class ScientificLiteracyEvaluation {
 
     // 获取所有学生数据
     async getAllStudentData() {
-        // 1. 首先尝试从GitHub获取数据（使用GitHub Raw URL）
-        // 请确保将下面的URL替换为您实际的GitHub仓库Raw URL
-        const githubUrl = 'https://raw.githubusercontent.com/[您的用户名]/[您的仓库名]/main/studentResults.json';
-        
         try {
-            // 尝试从GitHub获取数据
-            const githubData = await this.sendRequest(githubUrl);
-            if (githubData) {
-                console.log('从GitHub获取数据成功');
-                return githubData;
-            } else {
-                // 如果GitHub获取失败，尝试从本地API获取
-                console.log('从GitHub获取数据失败，尝试从本地API获取');
-                const localData = await this.sendRequest('http://localhost:8002');
-                if (localData) {
-                    return localData;
-                } else {
-                    // 如果本地API也失败，使用localStorage中的数据
-                    console.log('从本地API获取数据失败，使用localStorage中的数据');
-                    return JSON.parse(localStorage.getItem('studentResults') || '[]');
-                }
-            }
+            // 首先尝试从Firebase获取数据
+            const querySnapshot = await getDocs(this.studentsCollection);
+            const studentData = [];
+            
+            querySnapshot.forEach((doc) => {
+                // 将Firebase文档转换为学生数据对象
+                const data = doc.data();
+                studentData.push({
+                    ...data,
+                    id: doc.id // 保存文档ID，用于后续更新和删除操作
+                });
+            });
+            
+            console.log('从Firebase获取数据成功');
+            
+            // 同时将数据保存到localStorage作为备份
+            localStorage.setItem('studentResults', JSON.stringify(studentData));
+            
+            return studentData;
         } catch (error) {
-            console.error('获取数据失败:', error);
-            // 如果所有方法都失败，使用localStorage中的数据
+            console.error('从Firebase获取数据失败:', error);
+            
+            // 如果Firebase获取失败，尝试从localStorage获取
+            console.log('从localStorage获取数据');
             return JSON.parse(localStorage.getItem('studentResults') || '[]');
         }
     }
@@ -850,12 +878,12 @@ class ScientificLiteracyEvaluation {
     // 同步数据功能
     async syncData() {
         try {
-            // 从服务器/GitHub获取最新数据
+            // 从Firebase获取最新数据
             const data = await this.getAllStudentData();
             this.allStudents = data;
             localStorage.setItem('studentResults', JSON.stringify(data));
             
-            // 刷新数据表格
+            // 刷新数据表格和统计数据
             this.loadStudentDataTable();
             this.updateAdminStats();
             
@@ -868,11 +896,21 @@ class ScientificLiteracyEvaluation {
 
     // 保存学生数据
     async saveStudentData(studentData) {
-        const result = await this.sendRequest('http://localhost:8002', 'POST', studentData);
-        if (result && result.success) {
+        try {
+            // 将数据保存到Firebase
+            await addDoc(this.studentsCollection, studentData);
+            console.log('学生数据保存到Firebase成功');
+            
+            // 同时将数据保存到localStorage作为备份
+            let allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+            allResults.push(studentData);
+            localStorage.setItem('studentResults', JSON.stringify(allResults));
+            
             return true;
-        } else {
-            // 服务器保存失败时，回退到localStorage
+        } catch (error) {
+            console.error('学生数据保存到Firebase失败:', error);
+            
+            // 保存失败时，回退到localStorage
             let allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
             allResults.push(studentData);
             localStorage.setItem('studentResults', JSON.stringify(allResults));
@@ -880,13 +918,39 @@ class ScientificLiteracyEvaluation {
         }
     }
 
-    // 保存所有学生数据到服务器
+    // 保存所有学生数据到Firebase
     async saveAllStudentData(allResults) {
-        const result = await this.sendRequest('http://localhost:8002', 'PUT', allResults);
-        if (result && result.success) {
+        try {
+            // 创建批处理操作
+            const batch = writeBatch(this.firestore);
+            
+            // 首先获取所有现有文档并添加到批处理中进行删除
+            const studentsSnapshot = await getDocs(this.studentsCollection);
+            studentsSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            
+            // 然后将所有新数据添加到批处理中
+            allResults.forEach(studentData => {
+                // 创建新文档引用
+                const newStudentDoc = doc(collection(this.firestore, 'students'));
+                // 将docId添加到学生数据中，以便后续引用
+                studentData.docId = newStudentDoc.id;
+                // 添加到批处理中
+                batch.set(newStudentDoc, studentData);
+            });
+            
+            // 执行批处理操作
+            await batch.commit();
+            console.log('所有学生数据保存到Firebase成功');
+            
+            // 更新localStorage
+            localStorage.setItem('studentResults', JSON.stringify(allResults));
             return true;
-        } else {
-            // 服务器保存失败时，回退到localStorage
+        } catch (error) {
+            console.error('所有学生数据保存到Firebase失败:', error);
+            
+            // 保存失败时，回退到localStorage
             localStorage.setItem('studentResults', JSON.stringify(allResults));
             return false;
         }
@@ -897,19 +961,36 @@ class ScientificLiteracyEvaluation {
         const allResults = await this.getAllStudentData();
         if (index >= 0 && index < allResults.length) {
             const studentData = allResults[index];
-            const result = await this.sendRequest('http://localhost:8002', 'DELETE', studentData);
             
-            if (result && result.success) {
-                this.loadStudentDataTable();
-                this.updateAdminStats();
-                alert('数据删除成功！');
-            } else {
-                // 服务器删除失败时，回退到localStorage
+            try {
+                // 从Firebase删除数据
+                if (studentData.docId) {
+                    await deleteDoc(doc(this.firestore, 'students', studentData.docId));
+                    console.log('学生数据从Firebase删除成功');
+                }
+                
+                // 更新localStorage
                 allResults.splice(index, 1);
                 localStorage.setItem('studentResults', JSON.stringify(allResults));
+                
+                // 刷新表格和统计数据
                 this.loadStudentDataTable();
                 this.updateAdminStats();
                 alert('数据删除成功！');
+            } catch (error) {
+                console.error('从Firebase删除数据失败:', error);
+                
+                // 删除失败时，尝试只更新localStorage
+                try {
+                    allResults.splice(index, 1);
+                    localStorage.setItem('studentResults', JSON.stringify(allResults));
+                    this.loadStudentDataTable();
+                    this.updateAdminStats();
+                    alert('数据删除成功！');
+                } catch (localError) {
+                    console.error('更新localStorage失败:', localError);
+                    alert('数据删除失败！');
+                }
             }
         }
     }

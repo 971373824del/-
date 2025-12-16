@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase功能测试</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            padding: 8px 15px;
+            margin: 5px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>Firebase功能测试</h1>
+    <p>本页面用于测试科学素养测评系统的Firebase功能是否正常工作。</p>
+
+    <div class="test-section">
+        <h2>1. Firebase初始化测试</h2>
+        <p>点击下方按钮测试Firebase是否能够正常初始化：</p>
+        <button onclick="testFirebaseInit()">测试Firebase初始化</button>
+        <div id="init-result" class="test-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 数据写入测试</h2>
+        <p>点击下方按钮测试是否能够将数据写入Firebase：</p>
+        <button onclick="testFirebaseWrite()">测试数据写入</button>
+        <div id="write-result" class="test-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. 数据读取测试</h2>
+        <p>点击下方按钮测试是否能够从Firebase读取数据：</p>
+        <button onclick="testFirebaseRead()">测试数据读取</button>
+        <div id="read-result" class="test-result"></div>
+        <div id="read-data" style="margin-top: 10px; padding: 10px; background-color: #f8f9fa; border-radius: 5px; display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. 数据删除测试</h2>
+        <p>点击下方按钮测试是否能够从Firebase删除数据：</p>
+        <button onclick="testFirebaseDelete()">测试数据删除</button>
+        <div id="delete-result" class="test-result"></div>
+    </div>
+
+    <script>
+        // Firebase配置（请替换为您的配置）
+        const firebaseConfig = {
+            apiKey: "YOUR_FIREBASE_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        let db;
+
+        // 测试Firebase初始化
+        function testFirebaseInit() {
+            const resultDiv = document.getElementById('init-result');
+            resultDiv.innerHTML = '<p>正在初始化Firebase...</p>';
+            resultDiv.className = 'test-result info';
+
+            try {
+                // 初始化Firebase
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                
+                resultDiv.innerHTML = '<p>✅ Firebase初始化成功！</p>';
+                resultDiv.className = 'test-result success';
+            } catch (error) {
+                resultDiv.innerHTML = `<p>❌ Firebase初始化失败：${error.message}</p>`;
+                resultDiv.className = 'test-result error';
+            }
+        }
+
+        // 测试数据写入
+        function testFirebaseWrite() {
+            const resultDiv = document.getElementById('write-result');
+            resultDiv.innerHTML = '<p>正在写入测试数据...</p>';
+            resultDiv.className = 'test-result info';
+
+            if (!db) {
+                resultDiv.innerHTML = '<p>❌ 请先初始化Firebase！</p>';
+                resultDiv.className = 'test-result error';
+                return;
+            }
+
+            try {
+                // 写入测试数据
+                const testData = {
+                    name: "测试学生",
+                    grade: "1年级",
+                    class: "1班",
+                    testDate: "2023-12-01",
+                    timestamp: Date.now()
+                };
+
+                // 写入到测试节点
+                db.ref('testData').set(testData).then(() => {
+                    resultDiv.innerHTML = '<p>✅ 数据写入成功！</p>';
+                    resultDiv.className = 'test-result success';
+                }).catch((error) => {
+                    resultDiv.innerHTML = `<p>❌ 数据写入失败：${error.message}</p>`;
+                    resultDiv.className = 'test-result error';
+                });
+            } catch (error) {
+                resultDiv.innerHTML = `<p>❌ 数据写入失败：${error.message}</p>`;
+                resultDiv.className = 'test-result error';
+            }
+        }
+
+        // 测试数据读取
+        function testFirebaseRead() {
+            const resultDiv = document.getElementById('read-result');
+            const dataDiv = document.getElementById('read-data');
+            
+            resultDiv.innerHTML = '<p>正在读取测试数据...</p>';
+            resultDiv.className = 'test-result info';
+            dataDiv.style.display = 'none';
+
+            if (!db) {
+                resultDiv.innerHTML = '<p>❌ 请先初始化Firebase！</p>';
+                resultDiv.className = 'test-result error';
+                return;
+            }
+
+            try {
+                // 读取测试数据
+                db.ref('testData').once('value').then((snapshot) => {
+                    const data = snapshot.val();
+                    
+                    if (data) {
+                        resultDiv.innerHTML = '<p>✅ 数据读取成功！</p>';
+                        resultDiv.className = 'test-result success';
+                        
+                        // 显示读取的数据
+                        dataDiv.innerHTML = '<h3>读取的数据：</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                        dataDiv.style.display = 'block';
+                    } else {
+                        resultDiv.innerHTML = '<p>⚠️ 读取成功，但没有找到数据。</p>';
+                        resultDiv.className = 'test-result info';
+                    }
+                }).catch((error) => {
+                    resultDiv.innerHTML = `<p>❌ 数据读取失败：${error.message}</p>`;
+                    resultDiv.className = 'test-result error';
+                });
+            } catch (error) {
+                resultDiv.innerHTML = `<p>❌ 数据读取失败：${error.message}</p>`;
+                resultDiv.className = 'test-result error';
+            }
+        }
+
+        // 测试数据删除
+        function testFirebaseDelete() {
+            const resultDiv = document.getElementById('delete-result');
+            resultDiv.innerHTML = '<p>正在删除测试数据...</p>';
+            resultDiv.className = 'test-result info';
+
+            if (!db) {
+                resultDiv.innerHTML = '<p>❌ 请先初始化Firebase！</p>';
+                resultDiv.className = 'test-result error';
+                return;
+            }
+
+            try {
+                // 删除测试数据
+                db.ref('testData').remove().then(() => {
+                    resultDiv.innerHTML = '<p>✅ 数据删除成功！</p>';
+                    resultDiv.className = 'test-result success';
+                }).catch((error) => {
+                    resultDiv.innerHTML = `<p>❌ 数据删除失败：${error.message}</p>`;
+                    resultDiv.className = 'test-result error';
+                });
+            } catch (error) {
+                resultDiv.innerHTML = `<p>❌ 数据删除失败：${error.message}</p>`;
+                resultDiv.className = 'test-result error';
+            }
+        }
+    </script>
+</body>
+</html>
