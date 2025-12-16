@@ -350,6 +350,9 @@ class ScientificLiteracyEvaluation {
         this.bindEvents();
         this.loadStudentData();
         this.loadAdminData();
+        
+        // 初始化时默认只显示登录页面
+        this.showLoginPage();
     }
 
     bindEvents() {
@@ -362,14 +365,49 @@ class ScientificLiteracyEvaluation {
         document.getElementById('submit-btn').addEventListener('click', () => this.submitTest());
         
         // 管理员登录
-        document.getElementById('login-btn').addEventListener('click', () => this.adminLogin());
+        document.getElementById('login-btn').addEventListener('click', () => this.adminLogin(true)); // 主登录页面
         document.getElementById('logout-btn').addEventListener('click', () => this.adminLogout());
         document.getElementById('forgot-password-btn').addEventListener('click', () => this.showForgotPassword());
+        
+        // 密码显示/隐藏切换
+        document.getElementById('toggle-password-btn').addEventListener('click', () => this.togglePasswordVisibility());
+        // 后台管理页面密码显示/隐藏切换
+        if (document.getElementById('toggle-dashboard-password-btn')) {
+            document.getElementById('toggle-dashboard-password-btn').addEventListener('click', () => this.togglePasswordVisibility('admin-dashboard-password', 'toggle-dashboard-password-btn'));
+        }
+        
+        // 导航链接点击事件
+        document.querySelectorAll('nav a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = link.getAttribute('href').substring(1); // 去除#号
+                this.showSection(targetId);
+                
+                // 更新导航链接的激活状态
+                document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+                link.classList.add('active');
+            });
+        });
+        
+        // 后台管理登录表单提交
+        if (document.getElementById('admin-login-form')) {
+            document.getElementById('admin-login-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.adminLogin(false); // 后台管理登录
+            });
+        }
+        
+        // 为旧的登录按钮添加事件监听（如果存在）
+        if (document.getElementById('admin-login-btn')) {
+            document.getElementById('admin-login-btn').addEventListener('click', () => this.adminLogin(false));
+        }
+        
         document.getElementById('back-to-login').addEventListener('click', () => this.showAdminLogin());
         
         // 后台管理功能
         document.getElementById('export-data-btn').addEventListener('click', () => this.exportAllData());
         document.getElementById('import-data-btn').addEventListener('click', () => this.importData());
+        document.getElementById('sync-data-btn').addEventListener('click', () => this.syncData());
         document.getElementById('clear-data-btn').addEventListener('click', () => this.clearAllData());
         document.getElementById('change-password-btn').addEventListener('click', () => this.changeAdminPassword());
         
@@ -381,9 +419,12 @@ class ScientificLiteracyEvaluation {
             btn.addEventListener('click', (e) => this.switchAdminTab(e.target.dataset.tab));
         });
         
+        // 学生数据管理生成分析报告功能
+        document.getElementById('generate-student-analysis-btn').addEventListener('click', () => this.generateStudentAnalysisReport());
         // 班级/年级分析报告功能
-        document.getElementById('generate-analysis-btn').addEventListener('click', () => this.generateAnalysisReport());
-        document.getElementById('download-analysis-btn').addEventListener('click', () => this.downloadAnalysisReport());
+        document.getElementById('generate-analysis-btn').addEventListener('click', () => this.generateClassGradeAnalysisReport());
+        document.getElementById('download-word-btn').addEventListener('click', () => this.downloadAnalysisReport('word'));
+        document.getElementById('download-pdf-btn').addEventListener('click', () => this.downloadAnalysisReport('pdf'));
         
         // 单个学生报告下载功能
         document.getElementById('download-report-btn').addEventListener('click', () => this.downloadStudentReport());
@@ -486,6 +527,17 @@ class ScientificLiteracyEvaluation {
                 this.saveTestProgress();
             });
         });
+        
+        // 让整个选项div都可以点击选中
+        questionContainer.querySelectorAll('.option').forEach(option => {
+            option.addEventListener('click', () => {
+                const radioInput = option.querySelector('input[type="radio"]');
+                radioInput.checked = true;
+                this.answers[this.currentQuestionIndex] = parseInt(radioInput.value);
+                // 保存当前测试进度
+                this.saveTestProgress();
+            });
+        });
 
         // 更新导航按钮状态
         this.updateNavigationButtons();
@@ -544,6 +596,11 @@ class ScientificLiteracyEvaluation {
             return;
         }
 
+        // 询问是否确认提交测试
+        if (!confirm('确定要提交测试吗？提交后将无法修改答案。')) {
+            return;
+        }
+
         this.testCompleted = true;
         
         // 计算测评结果
@@ -562,6 +619,7 @@ class ScientificLiteracyEvaluation {
 
         // 显示测评报告
         this.displayResults(results);
+        this.generateAnalysisReport(results);
         this.showSection('results');
         
         // 测试完成后，清除保存的测试进度
@@ -638,6 +696,27 @@ class ScientificLiteracyEvaluation {
         document.getElementById('score-grade').textContent = results.comprehensiveGrade.grade;
         document.getElementById('score-grade').style.backgroundColor = results.comprehensiveGrade.color;
         document.getElementById('score-description').textContent = this.getGradeDescription(results.comprehensiveGrade.grade);
+
+        // 显示各维度详细结果
+        // 科学知识
+        document.getElementById('science-knowledge-score').textContent = results.dimensionScores['科学知识'].toFixed(2);
+        document.getElementById('science-knowledge-grade').textContent = results.dimensionGrades['科学知识'].grade;
+        document.getElementById('science-knowledge-grade').style.color = results.dimensionGrades['科学知识'].color;
+
+        // 科学探究能力
+        document.getElementById('inquiry-ability-score').textContent = results.dimensionScores['科学探究能力'].toFixed(2);
+        document.getElementById('inquiry-ability-grade').textContent = results.dimensionGrades['科学探究能力'].grade;
+        document.getElementById('inquiry-ability-grade').style.color = results.dimensionGrades['科学探究能力'].color;
+
+        // 科学态度与情感
+        document.getElementById('attitude-emotion-score').textContent = results.dimensionScores['科学态度与情感'].toFixed(2);
+        document.getElementById('attitude-emotion-grade').textContent = results.dimensionGrades['科学态度与情感'].grade;
+        document.getElementById('attitude-emotion-grade').style.color = results.dimensionGrades['科学态度与情感'].color;
+
+        // 科学、技术与社会的关系
+        document.getElementById('sts-relation-score').textContent = results.dimensionScores['科学、技术与社会的关系'].toFixed(2);
+        document.getElementById('sts-relation-grade').textContent = results.dimensionGrades['科学、技术与社会的关系'].grade;
+        document.getElementById('sts-relation-grade').style.color = results.dimensionGrades['科学、技术与社会的关系'].color;
 
         // 显示详细结果表格
         const tableBody = document.querySelector('#detailed-table tbody');
@@ -726,6 +805,10 @@ class ScientificLiteracyEvaluation {
         
         try {
             const response = await fetch(url, options);
+            // 检查响应是否成功
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             return await response.json();
         } catch (error) {
             console.error('服务器通信错误:', error);
@@ -735,8 +818,52 @@ class ScientificLiteracyEvaluation {
 
     // 获取所有学生数据
     async getAllStudentData() {
-        const data = await this.sendRequest('http://localhost:8002');
-        return data || JSON.parse(localStorage.getItem('studentResults') || '[]');
+        // 1. 首先尝试从GitHub获取数据（使用GitHub Raw URL）
+        // 请确保将下面的URL替换为您实际的GitHub仓库Raw URL
+        const githubUrl = 'https://raw.githubusercontent.com/[您的用户名]/[您的仓库名]/main/studentResults.json';
+        
+        try {
+            // 尝试从GitHub获取数据
+            const githubData = await this.sendRequest(githubUrl);
+            if (githubData) {
+                console.log('从GitHub获取数据成功');
+                return githubData;
+            } else {
+                // 如果GitHub获取失败，尝试从本地API获取
+                console.log('从GitHub获取数据失败，尝试从本地API获取');
+                const localData = await this.sendRequest('http://localhost:8002');
+                if (localData) {
+                    return localData;
+                } else {
+                    // 如果本地API也失败，使用localStorage中的数据
+                    console.log('从本地API获取数据失败，使用localStorage中的数据');
+                    return JSON.parse(localStorage.getItem('studentResults') || '[]');
+                }
+            }
+        } catch (error) {
+            console.error('获取数据失败:', error);
+            // 如果所有方法都失败，使用localStorage中的数据
+            return JSON.parse(localStorage.getItem('studentResults') || '[]');
+        }
+    }
+
+    // 同步数据功能
+    async syncData() {
+        try {
+            // 从服务器/GitHub获取最新数据
+            const data = await this.getAllStudentData();
+            this.allStudents = data;
+            localStorage.setItem('studentResults', JSON.stringify(data));
+            
+            // 刷新数据表格
+            this.loadStudentDataTable();
+            this.updateAdminStats();
+            
+            alert('数据同步成功！');
+        } catch (error) {
+            console.error('数据同步失败:', error);
+            alert('数据同步失败，请重试！\n错误信息：' + error.message);
+        }
     }
 
     // 保存学生数据
@@ -790,6 +917,12 @@ class ScientificLiteracyEvaluation {
     generateAnalysisReport(results) {
         const reportContainer = document.getElementById('analysis-report');
         
+        // 确保results和currentStudent都存在
+        if (!results || !this.currentStudent) {
+            reportContainer.innerHTML = '<p>请先完成测评并生成报告...</p>';
+            return;
+        }
+        
         let report = `
             <h3>学生科学素养综合分析</h3>
             <p>根据测评结果，${this.currentStudent.name}同学的科学素养综合得分为${results.comprehensiveScore}分，等级为${results.comprehensiveGrade.grade}。</p>
@@ -820,28 +953,28 @@ class ScientificLiteracyEvaluation {
     getDimensionAnalysis(dimension, grade) {
         const analyses = {
             '科学知识': {
-                '优秀': '对科学基础知识掌握非常扎实，能够很好地理解和应用科学概念。',
-                '良好': '对科学基础知识有较好的掌握，但在一些细节方面还可以进一步加强。',
-                '合格': '对科学基础知识有一定的了解，但需要系统地复习和巩固。',
-                '不合格': '科学基础知识掌握不够，需要加强学习。'
+                '优秀': '在科学知识维度表现出色，对自然科学、生命科学、物质科学等领域的核心概念和原理掌握非常扎实，能够灵活运用所学知识解释常见的自然现象，具备较强的科学知识整合能力。',
+                '良好': '对科学基础知识有较好的掌握，能够理解和运用主要的科学概念和原理，但在一些细节知识和知识的深度拓展方面还可以进一步加强。',
+                '合格': '基本掌握了科学基础知识的核心内容，但知识体系不够完整，部分概念的理解存在偏差，需要系统地复习和巩固。',
+                '不合格': '科学基础知识掌握不够扎实，对关键概念和原理的理解存在较多误区，需要从基础开始加强学习，建立起完整的科学知识框架。'
             },
             '科学探究能力': {
-                '优秀': '具备很强的科学探究能力，能够独立设计和完成实验。',
-                '良好': '科学探究能力不错，能够在指导下完成实验。',
-                '合格': '基本具备科学探究能力，但需要更多的实践机会。',
-                '不合格': '科学探究能力有待提高，需要加强实验操作练习。'
+                '优秀': '具备很强的科学探究能力，能够独立提出科学问题，设计合理的实验方案，熟练运用各种实验器材进行操作，准确记录实验数据，并能对实验结果进行深入分析和解释，得出科学结论。',
+                '良好': '科学探究能力不错，能够在教师或同伴的指导下完成实验探究活动，掌握了基本的实验操作技能和数据处理方法，但在实验设计的创新性和问题解决的灵活性方面还有提升空间。',
+                '合格': '基本具备科学探究能力，能够参与简单的实验活动，理解科学探究的基本流程，但实验操作不够熟练，对实验现象的分析和解释能力较弱，需要更多的实践机会来提高。',
+                '不合格': '科学探究能力有待提高，缺乏基本的实验操作技能，对科学探究的过程和方法理解不深，需要加强实验操作练习和科学方法的学习。'
             },
             '科学态度与情感': {
-                '优秀': '对科学充满热情，具有良好的科学态度和探索精神。',
-                '良好': '对科学有兴趣，能够积极参与科学活动。',
-                '合格': '对科学有一定的兴趣，但参与积极性还可以提高。',
-                '不合格': '对科学缺乏兴趣，需要培养科学探索的热情。'
+                '优秀': '对科学充满热情，具有强烈的好奇心和探索精神，主动关注科学技术的发展动态，积极参与各种科学实践活动，能够以科学的态度面对问题和挑战，具备严谨的科学思维和批判精神。',
+                '良好': '对科学有较浓厚的兴趣，能够积极参与科学学习和实践活动，尊重事实和证据，愿意与他人合作交流，但在面对困难和挫折时的坚持性还有待加强。',
+                '合格': '对科学有一定的兴趣，能够参与基本的科学学习活动，但学习的主动性和积极性不够高，缺乏深入探索的欲望，需要进一步激发对科学的热情。',
+                '不合格': '对科学缺乏足够的兴趣和热情，学习态度不够积极，参与科学活动的主动性较低，需要通过多样化的教学方式和实践活动来培养科学探索的兴趣和热情。'
             },
             '科学、技术与社会的关系': {
-                '优秀': '能够很好地理解科学、技术与社会的关系，具有科学的社会责任感。',
-                '良好': '对科学、技术与社会的关系有一定的认识。',
-                '合格': '基本了解科学、技术与社会的关系。',
-                '不合格': '对科学、技术与社会的关系认识不足，需要加强学习。'
+                '优秀': '能够很好地理解科学、技术与社会之间的相互关系，认识到科学技术对社会发展的重要作用，同时也关注科学技术带来的伦理和环境问题，具备科学的社会责任感，能够从科学的角度分析和解决实际问题。',
+                '良好': '对科学、技术与社会的关系有一定的认识，了解科学技术在日常生活中的应用，能够初步分析科学技术对社会发展的影响，但对一些复杂的科学技术社会问题的理解还不够深入。',
+                '合格': '基本了解科学、技术与社会的关系，知道科学技术在生活中的一些应用，但对科学技术的社会影响缺乏全面的认识，需要加强相关知识的学习和社会实践。',
+                '不合格': '对科学、技术与社会的关系认识不足，缺乏对科学技术社会影响的了解，需要通过具体案例和社会实践来加深理解。'
             }
         };
 
@@ -854,43 +987,102 @@ class ScientificLiteracyEvaluation {
             .sort((a, b) => results.dimensionScores[a] - results.dimensionScores[b]);
 
         if (weakDimensions.length === 0) {
-            return '继续保持你的优秀表现，不断探索科学的奥秘！';
+            return '恭喜你！在本次科学素养测评中，你展现了全面且优异的科学能力。你不仅对科学知识有深入的理解，还具备出色的探究能力和积极的科学态度。建议你继续保持这种良好的学习状态，主动关注科学技术的最新发展，参与更多挑战性的科学探究活动，不断拓展科学视野，在科学的道路上更进一步！';
         }
 
-        let suggestions = `建议重点加强${weakDimensions.join('、')}方面的学习和实践。`;
+        let suggestions = `<strong>基于你的测评结果，建议重点加强${weakDimensions.join('、')}方面的学习和实践：</strong><br><br>`;
         
         if (weakDimensions.includes('科学知识')) {
-            suggestions += ' 可以多阅读科学书籍，观看科学纪录片。';
+            suggestions += '<strong>1. 科学知识方面的改进建议：</strong><br>';
+            suggestions += '- 系统梳理科学知识体系，使用思维导图等工具建立知识网络，特别关注概念之间的内在联系；<br>';
+            suggestions += '- 针对薄弱领域（如物理、化学、生物等）选择适合的科普书籍、期刊或在线课程进行深入学习；<br>';
+            suggestions += '- 结合实际生活现象理解科学原理，将抽象的科学知识转化为具体的应用案例；<br>';
+            suggestions += '- 定期进行知识回顾和巩固，通过练习、讨论等方式加深对关键概念的理解。<br><br>';
         }
         
         if (weakDimensions.includes('科学探究能力')) {
-            suggestions += ' 积极参与科学实验和实践活动，提高动手能力。';
+            suggestions += '<strong>2. 科学探究能力方面的改进建议：</strong><br>';
+            suggestions += '- 积极参与学校和社区组织的科学实验、科技竞赛等实践活动，提高动手操作能力；<br>';
+            suggestions += '- 学习科学探究的基本方法，包括提出问题、作出假设、设计实验、收集数据、分析结果等；<br>';
+            suggestions += '- 在日常生活中主动观察，尝试用科学的方法解决实际问题，培养问题解决能力；<br>';
+            suggestions += '- 与同学或老师合作开展小课题研究，学习团队协作和科学交流的方法。<br><br>';
         }
         
         if (weakDimensions.includes('科学态度与情感')) {
-            suggestions += ' 培养对科学的兴趣和好奇心，主动探索周围的科学现象。';
+            suggestions += '<strong>3. 科学态度与情感方面的改进建议：</strong><br>';
+            suggestions += '- 培养对科学的好奇心和探索欲，主动关注身边的科学现象和科学新闻；<br>';
+            suggestions += '- 参与科技社团、科学兴趣小组等活动，与志同道合的伙伴一起探索科学；<br>';
+            suggestions += '- 学习科学家的故事，了解科学发展的历程，培养严谨的科学态度和坚持不懈的精神；<br>';
+            suggestions += '- 尝试将科学学习与个人兴趣结合起来，发现科学的趣味性和实用性。<br><br>';
         }
         
         if (weakDimensions.includes('科学、技术与社会的关系')) {
-            suggestions += ' 关注科学技术的发展，了解科学技术对社会的影响。';
+            suggestions += '<strong>4. 科学、技术与社会的关系方面的改进建议：</strong><br>';
+            suggestions += '- 关注科学技术的最新发展动态，特别是与生活、环境、健康相关的科技成果；<br>';
+            suggestions += '- 分析科学技术对社会发展的影响，理解科学技术的双刃剑性质；<br>';
+            suggestions += '- 参与社会实践活动，了解科学技术在解决社会问题中的应用；<br>';
+            suggestions += '- 学习科学伦理知识，培养科学的社会责任感和全球视野。<br><br>';
         }
 
+        suggestions += '<strong>总结建议：</strong>制定一个合理的学习计划，分阶段、有重点地提升各薄弱维度的能力。保持积极的学习态度，勇于尝试新的科学探究活动，不断反思和调整学习方法。相信通过持续的努力和实践，你一定能在科学素养方面取得显著的进步！';
         return suggestions;
     }
 
     // 管理员功能
-    adminLogin() {
-        const username = document.getElementById('admin-username').value;
-        const password = document.getElementById('admin-password').value;
+    adminLogin(isMainLogin = false) {
+        let username, password;
+        
+        if (isMainLogin) {
+            // 主登录页面
+            username = document.getElementById('admin-username').value;
+            password = document.getElementById('admin-password').value;
+        } else {
+            // 后台管理登录
+            username = document.getElementById('admin-username').value;
+            password = document.getElementById('admin-dashboard-password').value;
+        }
 
-        // 从localStorage获取管理员密码，默认密码为HWZXXX
-        const adminPassword = localStorage.getItem('adminPassword') || 'HWZXXX';
-
-        if (username === 'admin' && password === adminPassword) {
-            this.adminLoggedIn = true;
-            this.showAdminDashboard();
-            this.updateAdminStats();
-            this.loadStudentDataTable();
+        if (username === 'admin') {
+            if (isMainLogin && password === 'huiwang') {
+                // 主登录页面登录成功
+                this.adminLoggedIn = true;
+                
+                // 隐藏登录页面
+                document.getElementById('login-page').style.display = 'none';
+                
+                // 显示系统主界面
+                document.querySelector('header').style.display = 'block';
+                document.querySelector('nav').style.display = 'block';
+                
+                // 显示指定的功能区域：学生信息输入栏
+                const sections = document.querySelectorAll('main section');
+                sections.forEach(section => {
+                    // 只显示学生信息区域，其他功能区域通过导航栏切换显示
+                    if (section.id === 'student-info') {
+                        section.style.display = 'block';
+                    } else {
+                        section.style.display = 'none';
+                    }
+                });
+                
+                // 后台管理区域需要单独密码进入
+                document.getElementById('admin-login').style.display = 'block';
+                if (document.getElementById('admin-dashboard')) {
+                    document.getElementById('admin-dashboard').style.display = 'none';
+                }
+                
+                this.loadStudentData();
+            } else if (!isMainLogin && password === 'HWZXXX') {
+                // 后台管理登录成功
+                this.adminLoggedIn = true;
+                
+                // 显示管理员仪表板
+                this.showAdminDashboard();
+                this.updateAdminStats();
+                this.loadStudentDataTable();
+            } else {
+                alert('用户名或密码错误！');
+            }
         } else {
             alert('用户名或密码错误！');
         }
@@ -902,21 +1094,89 @@ class ScientificLiteracyEvaluation {
     }
 
     showAdminLogin() {
-        document.getElementById('admin-login').style.display = 'block';
-        document.getElementById('admin-dashboard').style.display = 'none';
-        document.getElementById('forgot-password').style.display = 'none';
+        this.showLoginPage();
+    }
+    
+    /**
+     * 显示登录页面
+     */
+    showSection(sectionId) {
+        // 显示指定的功能区域并隐藏其他区域
+        const sections = document.querySelectorAll('main section');
+        sections.forEach(section => {
+            section.style.display = 'none';
+        });
+        
+        // 显示选中的区域
+        const targetSection = document.getElementById(sectionId);
+        if (targetSection) {
+            targetSection.style.display = 'block';
+        }
+    }
+
+    showLoginPage() {
+        // 显示登录页面
+        document.getElementById('login-page').style.display = 'block';
+        
+        // 隐藏其他所有区域
+        document.querySelector('header').style.display = 'none';
+        document.querySelector('nav').style.display = 'none';
+        
+        const sections = document.querySelectorAll('main section');
+        sections.forEach(section => {
+            section.style.display = 'none';
+        });
     }
 
     showAdminDashboard() {
+        // 只切换后台管理内部的视图，不影响其他功能区域的显示状态
         document.getElementById('admin-login').style.display = 'none';
         document.getElementById('admin-dashboard').style.display = 'block';
         document.getElementById('forgot-password').style.display = 'none';
+        
+        // 添加全选/取消全选功能
+        setTimeout(() => {
+            const selectAllCheckbox = document.getElementById('select-all-checkbox');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    const checkboxes = document.querySelectorAll('.student-checkbox');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = this.checked;
+                    });
+                });
+            }
+        }, 100);
     }
 
     showForgotPassword() {
         document.getElementById('admin-login').style.display = 'none';
         document.getElementById('admin-dashboard').style.display = 'none';
         document.getElementById('forgot-password').style.display = 'block';
+    }
+
+    togglePasswordVisibility(inputId = 'admin-password', btnId = 'toggle-password-btn') {
+        // 切换密码显示/隐藏
+        const passwordInput = document.getElementById(inputId);
+        const toggleBtn = document.getElementById(btnId);
+        
+        if (passwordInput && toggleBtn) {
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleBtn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24m0 0L9.9 4.24m0 0a9.12 9.12 0 0 1 3.76 3.76"></path>
+                    </svg>
+                `;
+            } else {
+                passwordInput.type = 'password';
+                toggleBtn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                `;
+            }
+        }
     }
 
     switchAdminTab(tabName) {
@@ -1034,6 +1294,7 @@ class ScientificLiteracyEvaluation {
         allResults.forEach((result, index) => {
             const row = document.createElement('tr');
             row.innerHTML = `
+                <td><input type="checkbox" class="student-checkbox" data-index="${index}"></td>
                 <td>${result.name}</td>
                 <td>${result.grade}年级</td>
                 <td>${result.className}</td>
@@ -1423,7 +1684,8 @@ class ScientificLiteracyEvaluation {
     }
 
     // 辅助方法
-    showSection(sectionId) {
+    // 导航栏的showSection方法
+    showNavSection(sectionId) {
         // 隐藏所有section
         document.querySelectorAll('section').forEach(section => {
             section.style.display = 'none';
@@ -1474,7 +1736,42 @@ class ScientificLiteracyEvaluation {
     }
     
     // 生成班级/年级分析报告
-    generateAnalysisReport() {
+    // 生成学生整体分析报告
+    generateStudentAnalysisReport() {
+        const allResults = JSON.parse(localStorage.getItem('studentResults') || '[]');
+        
+        if (allResults.length === 0) {
+            alert('没有学生数据可分析！');
+            return;
+        }
+        
+        // 获取所有选中的学生复选框
+        const checkboxes = document.querySelectorAll('.student-checkbox:checked');
+        if (checkboxes.length === 0) {
+            alert('请先选择至少一个学生！');
+            return;
+        }
+        
+        // 收集选中学生的数据
+        const selectedResults = [];
+        checkboxes.forEach(checkbox => {
+            const index = parseInt(checkbox.dataset.index);
+            selectedResults.push(allResults[index]);
+        });
+        
+        // 计算分析结果
+        const analysisResult = this.calculateGroupAnalysis(selectedResults);
+        
+        // 生成报告标题
+        const title = selectedResults.length === 1 
+            ? `${selectedResults[0].name}同学科学素养分析报告`
+            : '学生科学素养分析报告';
+        
+        this.renderAnalysisReport(analysisResult, title);
+    }
+    
+    // 生成班级/年级分析报告
+    generateClassGradeAnalysisReport() {
         const analysisType = document.getElementById('analysis-type').value;
         const analysisGrade = parseInt(document.getElementById('analysis-grade').value);
         const analysisClass = document.getElementById('analysis-class').value;
@@ -1577,35 +1874,48 @@ class ScientificLiteracyEvaluation {
             // 根据不同维度给出针对性分析
             switch(highestDimension[0]) {
                 case '科学知识':
-                    narrative += `对科学概念、原理等基础知识掌握扎实。`;
+                    narrative += `对自然科学、生命科学、物质科学等领域的核心概念、原理等基础知识掌握扎实，能够灵活运用所学知识解释常见的自然现象。`;
                     break;
                 case '科学探究能力':
-                    narrative += `具备较强的实验设计、观察、分析和解决问题的能力。`;
+                    narrative += `具备较强的实验设计能力、观察能力、数据分析能力和问题解决能力，能够独立或在团队合作中完成科学探究任务。`;
                     break;
                 case '科学态度与情感':
-                    narrative += `对科学学习具有浓厚的兴趣和积极的态度。`;
+                    narrative += `对科学学习具有浓厚的兴趣和积极的态度，主动关注科学技术的发展，表现出强烈的好奇心和探索精神。`;
                     break;
                 case '科学、技术与社会的关系':
-                    narrative += `能够较好地理解科学技术对社会发展的影响。`;
+                    narrative += `能够较好地理解科学技术对社会发展的影响，认识到科学技术的双刃剑性质，具备初步的科学社会责任意识。`;
                     break;
             }
             narrative += `</p>`;
             
+            // 添加各维度详细分析
+            narrative += `<div class="dimension-details">`;
+            sortedDimensions.forEach(([dimension, score], index) => {
+                const gradeCounts = result.dimensionGradeCount[dimension];
+                const percentages = dimensionPercentages[dimension];
+                
+                narrative += `<h5>${index + 1}. ${dimension}（平均得分：${score.toFixed(2)}分）</h5>`;
+                narrative += `<div class="grade-distribution">`;
+                narrative += `<p>等级分布：优秀${gradeCounts['优秀'] || 0}人（${percentages['优秀']}）、良好${gradeCounts['良好'] || 0}人（${percentages['良好']}）、合格${gradeCounts['合格'] || 0}人（${percentages['合格']}）、不合格${gradeCounts['不合格'] || 0}人（${percentages['不合格']}）</p>`;
+                narrative += `</div>`;
+            });
+            narrative += `</div>`;
+            
             narrative += `<p><strong>待提升维度：</strong>${lowestDimension[0]}，平均得分${lowestDimension[1].toFixed(2)}分。`;
-            narrative += `学生在该维度的表现相对薄弱，`;
+            narrative += `学生在该维度的表现相对薄弱，主要体现在：`;
             
             switch(lowestDimension[0]) {
                 case '科学知识':
-                    narrative += `需要加强对科学基础知识的学习和理解。`;
+                    narrative += `部分学生对科学概念的理解存在偏差，知识体系不够完整，综合运用知识解决问题的能力较弱。需要加强对科学基础知识的系统学习和理解。`;
                     break;
                 case '科学探究能力':
-                    narrative += `需要多参与科学实验和探究活动，提升实践能力。`;
+                    narrative += `学生在实验设计的创新性、数据分析的深度以及问题解决的灵活性方面表现不足。需要多参与科学实验和探究活动，提升实践能力。`;
                     break;
                 case '科学态度与情感':
-                    narrative += `需要激发对科学的兴趣，培养积极的学习态度。`;
+                    narrative += `部分学生对科学学习的兴趣不够浓厚，学习主动性不足，缺乏探索精神和创新意识。需要激发对科学的兴趣，培养积极的学习态度。`;
                     break;
                 case '科学、技术与社会的关系':
-                    narrative += `需要加强对科学技术与社会关系的认识和理解。`;
+                    narrative += `学生对科学技术与社会发展的关系理解不够深入，缺乏用科学视角分析社会问题的能力。需要加强对科学技术与社会关系的认识和理解。`;
                     break;
             }
             narrative += `</p>`;
@@ -1616,34 +1926,73 @@ class ScientificLiteracyEvaluation {
             
             // 根据整体情况给出建议
             if (failCount > 0) {
-                narrative += `<li>针对不合格学生，建议进行个性化辅导，重点夯实基础，激发学习兴趣。</li>`;
+                narrative += `<li><strong>个性化辅导：</strong>针对不合格学生，建议建立学习档案，分析其具体薄弱点，制定个性化的辅导计划。重点夯实基础知识，采用分层教学的方式，逐步提高学习难度，激发学习兴趣。</li>`;
             }
             
-            // 根据待提升维度给出建议
+            // 根据待提升维度给出详细建议
             switch(lowestDimension[0]) {
                 case '科学知识':
-                    narrative += `<li>在${lowestDimension[0]}维度，建议增加基础知识的巩固练习，通过多样化的教学方式帮助学生理解和记忆。</li>`;
+                    narrative += `<li><strong>科学知识维度提升策略：</strong></li>`;
+                    narrative += `<ul style="margin-left: 20px;">`;
+                    narrative += `<li>采用情境化教学，将抽象的科学知识与实际生活相结合，帮助学生理解和记忆；</li>`;
+                    narrative += `<li>利用多媒体教学资源（如动画、视频、模拟实验等）增强教学的直观性和趣味性；</li>`;
+                    narrative += `<li>设计多样化的练习和项目作业，促进学生对知识的深度理解和应用；</li>`;
+                    narrative += `<li>建立知识网络体系，帮助学生梳理科学概念之间的内在联系。</li>`;
+                    narrative += `</ul>`;
                     break;
                 case '科学探究能力':
-                    narrative += `<li>在${lowestDimension[0]}维度，建议增加实验课和探究活动的比例，让学生在实践中提升能力。</li>`;
+                    narrative += `<li><strong>科学探究能力提升策略：</strong></li>`;
+                    narrative += `<ul style="margin-left: 20px;">`;
+                    narrative += `<li>增加实验课和探究活动的课时比例，提供更多的动手操作机会；</li>`;
+                    narrative += `<li>开展开放式探究项目，鼓励学生自主提出问题、设计实验方案并实施；</li>`;
+                    narrative += `<li>组织科学探究竞赛和展示活动，激发学生的参与热情；</li>`;
+                    narrative += `<li>培养学生的科学思维方法，如观察法、实验法、比较法、归纳法等。</li>`;
+                    narrative += `</ul>`;
                     break;
                 case '科学态度与情感':
-                    narrative += `<li>在${lowestDimension[0]}维度，建议通过科学故事、科学家事迹等方式激发学生的学习兴趣和探索精神。</li>`;
+                    narrative += `<li><strong>科学态度与情感提升策略：</strong></li>`;
+                    narrative += `<ul style="margin-left: 20px;">`;
+                    narrative += `<li>通过讲述科学家的故事、介绍科学发现的历程，激发学生的科学兴趣和探索精神；</li>`;
+                    narrative += `<li>开展科技节、科普讲座等活动，营造浓厚的科学学习氛围；</li>`;
+                    narrative += `<li>鼓励学生参与科学社团和兴趣小组，培养团队合作精神；</li>`;
+                    narrative += `<li>及时肯定学生的进步和创新，增强学习自信心。</li>`;
+                    narrative += `</ul>`;
                     break;
                 case '科学、技术与社会的关系':
-                    narrative += `<li>在${lowestDimension[0]}维度，建议结合实际生活中的科技应用案例，帮助学生理解科学技术的社会价值。</li>`;
+                    narrative += `<li><strong>科学、技术与社会关系维度提升策略：</strong></li>`;
+                    narrative += `<ul style="margin-left: 20px;">`;
+                    narrative += `<li>结合实际生活中的科技应用案例，帮助学生理解科学技术的社会价值；</li>`;
+                    narrative += `<li>组织学生开展社会调查活动，如环境问题调查、科技产品使用情况调查等；</li>`;
+                    narrative += `<li>引导学生讨论科技伦理问题，培养科学社会责任意识；</li>`;
+                    narrative += `<li>关注科技前沿动态，介绍最新的科学发现和技术应用。</li>`;
+                    narrative += `</ul>`;
                     break;
             }
             
-            narrative += `<li>针对各维度的发展不平衡，建议开展跨维度的综合实践活动，促进学生科学素养的全面发展。</li>`;
-            narrative += `<li>定期开展科学测评，及时了解学生的学习情况，调整教学策略，提高教学效果。</li>`;
+            narrative += `<li><strong>跨维度融合：</strong>针对各维度的发展不平衡，建议开展跨维度的综合实践活动，如STEM教育项目、科技创新大赛等，促进学生科学素养的全面发展。</li>`;
+            narrative += `<li><strong>教学策略优化：</strong>定期开展科学素养测评，建立学生发展档案，及时了解学生的学习情况，动态调整教学策略。采用多元化的评价方式，全面评估学生的科学素养水平。</li>`;
+            narrative += `<li><strong>家校合作：</strong>加强与家长的沟通与合作，鼓励家长支持学生的科学学习，提供家庭实验和探究的机会，共同促进学生科学素养的提升。</li>`;
             narrative += `</ul>`;
             
             // 总结
             narrative += `<h4>四、总结</h4>`;
-            narrative += `<p>本次科学素养测评反映了学生的整体科学素养水平和各维度的发展状况。`;
-            narrative += `通过针对性的改进措施，相信学生的科学素养将得到全面提升。`;
-            narrative += `建议在今后的教学中，继续关注学生的全面发展，注重培养学生的创新精神和实践能力。</p>`;
+            narrative += `<p>本次科学素养测评全面反映了${result.totalStudents}名学生的整体科学素养水平和各维度的发展状况。测评结果显示：</p>`;
+            narrative += `<ul>`;
+            narrative += `<li>学生整体科学素养处于${parseFloat(passRate) >= 90 ? '优秀' : parseFloat(passRate) >= 80 ? '良好' : parseFloat(passRate) >= 70 ? '中等' : '待提升'}水平，整体合格率为${passRate}%；</li>`;
+            narrative += `<li>${highestDimension[0]}是学生的优势维度，显示出${highestDimension[0] === '科学知识' ? '扎实的基础知识' : highestDimension[0] === '科学探究能力' ? '较强的实践能力' : highestDimension[0] === '科学态度与情感' ? '积极的学习态度' : '良好的社会责任意识'}；</li>`;
+            narrative += `<li>${lowestDimension[0]}是学生的待提升维度，需要重点关注和加强培养；</li>`;
+            narrative += `<li>各维度发展存在一定的不平衡性，需要采取针对性的措施促进全面发展。</li>`;
+            narrative += `</ul>`;
+            
+            narrative += `<p>通过本次测评，学校和教师能够更清晰地了解学生科学素养的现状和发展需求，为后续的教学改进提供了有力依据。建议在今后的教育教学中：</p>`;
+            narrative += `<ul>`;
+            narrative += `<li>继续坚持以学生为中心的教学理念，关注学生的个体差异，实施个性化教育；</li>`;
+            narrative += `<li>深化课程改革，优化科学课程内容，注重科学素养的全面培养；</li>`;
+            narrative += `<li>加强科学教师队伍建设，提高教师的科学素养和教学能力；</li>`;
+            narrative += `<li>完善科学教育评价体系，建立科学素养发展的长效监测机制。</li>`;
+            narrative += `</ul>`;
+            
+            narrative += `<p>相信通过学校、教师、学生和家长的共同努力，学生的科学素养将得到全面、均衡的发展，为培养具有创新精神和实践能力的未来公民奠定坚实基础。</p>`;
             
             narrative += `</div>`;
             return narrative;
@@ -1664,6 +2013,11 @@ class ScientificLiteracyEvaluation {
             
             ${generateAnalysisNarrative()}
             
+            <h4>各维度平均得分雷达图</h4>
+            <div class="chart-container">
+                <canvas id="dimension-radar-chart" width="400" height="400"></canvas>
+            </div>
+            
             <h4>各维度平均得分</h4>
             <table class="analysis-table">
                 <thead>
@@ -1681,6 +2035,10 @@ class ScientificLiteracyEvaluation {
                     `).join('')}
                 </tbody>
             </table>
+            
+            <div id="radar-chart-container" data-dimension-scores='${JSON.stringify(result.dimensionScores)}'>
+                <canvas id="dimension-radar-chart" width="400" height="400"></canvas>
+            </div>
             
             <h4>综合等级分布</h4>
             <table class="analysis-table">
@@ -1730,17 +2088,190 @@ class ScientificLiteracyEvaluation {
         
         // 保存当前分析结果，用于下载
         this.currentAnalysisResult = { result, title };
+        
+        // 生成雷达图
+        this.generateRadarChart(result.dimensionScores);
+    }
+    
+    // 生成雷达图的辅助方法
+    generateRadarChart(dimensionScores) {
+        const radarCtx = document.getElementById('dimension-radar-chart').getContext('2d');
+        
+        // 确保之前的图表实例被销毁
+        if (window.radarChartInstance) {
+            window.radarChartInstance.destroy();
+        }
+        
+        // 创建新的雷达图实例
+        window.radarChartInstance = new Chart(radarCtx, {
+            type: 'radar',
+            data: {
+                labels: Object.keys(dimensionScores),
+                datasets: [{
+                    label: '各维度平均得分',
+                    data: Object.values(dimensionScores),
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1,
+                    pointBackgroundColor: 'rgba(75, 192, 192, 1)',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgba(75, 192, 192, 1)'
+                }]
+            },
+            options: {
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '各维度科学素养平均得分分布'
+                    }
+                }
+            }
+        });
     }
     
     // 下载分析报告
-    downloadAnalysisReport() {
+    downloadAnalysisReport(format) {
         if (!this.currentAnalysisResult) {
             alert('请先生成分析报告！');
             return;
         }
         
         const { result, title } = this.currentAnalysisResult;
+        const reportElement = document.getElementById('class-grade-analysis');
         
+        if (!reportElement || !reportElement.innerHTML) {
+            alert('报告内容不存在，请重新生成！');
+            return;
+        }
+        
+        const filename = `${title.replace(/[\s\/]/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+        
+        if (format === 'word') {
+            this.downloadClassGradeReportAsWord(reportElement, filename);
+        } else if (format === 'pdf') {
+            this.downloadClassGradeReportAsPDF(reportElement, filename);
+        } else {
+            // 默认生成CSV
+            this.downloadClassGradeReportAsCSV(result, title);
+        }
+    }
+    
+    // 下载班级/年级分析报告为Word文档
+    downloadClassGradeReportAsWord(reportElement, filename) {
+        const { result, title } = this.currentAnalysisResult;
+        
+        // 创建完整的HTML内容
+        const fullContent = `
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>${title}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h2, h3 { color: #333; }
+                    .analysis-report { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+                    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                </style>
+            </head>
+            <body>
+                <h2>${title}</h2>
+                <p>总人数: ${result.totalStudents}</p>
+                <p>平均得分: ${result.averageComprehensiveScore.toFixed(2)}</p>
+                <div class="analysis-report">
+                    ${reportElement.innerHTML}
+                </div>
+            </body>
+            </html>
+        `;
+        
+        // 创建下载链接
+        const blob = new Blob(['\ufeff' + fullContent], { type: 'application/msword;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${filename}.doc`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    // 下载班级/年级分析报告为PDF文档
+    downloadClassGradeReportAsPDF(reportElement, filename) {
+        // 确保jsPDF和html2canvas可用
+        if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
+            alert('PDF生成所需的库未加载完成，请稍后重试！');
+            return;
+        }
+        
+        const { result, title } = this.currentAnalysisResult;
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // 创建一个临时容器来合并所有内容
+        const tempContainer = document.createElement('div');
+        tempContainer.style.padding = '20px';
+        tempContainer.style.width = '210mm'; // A4宽度
+        tempContainer.style.background = 'white';
+        tempContainer.innerHTML = `
+            <h2>${title}</h2>
+            <p>总人数: ${result.totalStudents}</p>
+            <p>平均得分: ${result.averageComprehensiveScore.toFixed(2)}</p>
+            <div class="analysis-report">
+                ${reportElement.innerHTML}
+            </div>
+        `;
+        
+        document.body.appendChild(tempContainer);
+        
+        // 使用html2canvas将HTML转换为图片
+        html2canvas(tempContainer, {
+            scale: 2, // 提高清晰度
+            useCORS: true,
+            backgroundColor: '#ffffff'
+        }).then(canvas => {
+            // 将canvas添加到PDF
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 210; // A4宽度，单位mm
+            const pageHeight = 297; // A4高度，单位mm
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+            
+            // 添加第一页
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+            
+            // 如果内容超过一页，添加更多页面
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+            
+            // 下载PDF
+            pdf.save(`${filename}.pdf`);
+            
+            // 移除临时容器
+            document.body.removeChild(tempContainer);
+        });
+    }
+    
+    // 下载班级/年级分析报告为CSV文件
+    downloadClassGradeReportAsCSV(result, title) {
         // 生成CSV内容
         const headers = ['维度', '平均得分', '优秀人数', '良好人数', '合格人数', '不合格人数', '优秀率', '良好率', '合格率', '不合格率'];
         
@@ -1962,6 +2493,6 @@ document.querySelectorAll('nav a').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
         const sectionId = e.target.getAttribute('href').substring(1);
-        evaluation.showSection(sectionId);
+        evaluation.showNavSection(sectionId);
     });
 });

@@ -11,12 +11,43 @@
 </head>
 <body>
     <div class="container">
-        <header>
+        <!-- 登录页面 - 默认显示 -->
+        <section id="login-page" class="login-page">
+            <h1 class="system-title">惠王中心小学学生科学素养测评系统</h1>
+            <p class="system-subtitle">科学测评，助力成长</p>
+            <div class="login-form-container">
+                <h3>管理员登录</h3>
+                <div class="login-form">
+                    <div class="form-group">
+                        <label for="admin-username">用户名</label>
+                        <input type="text" id="admin-username" placeholder="请输入用户名">
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-password">密码</label>
+                        <div class="password-input-container">
+                            <input type="password" id="admin-password" placeholder="请输入密码">
+                            <button type="button" id="toggle-password-btn" class="toggle-password-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <button id="login-btn" class="btn btn-primary">登录系统</button>
+                        <button id="forgot-password-btn" class="btn btn-link">忘记密码？</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <header style="display: none;">
             <h1>惠王中心小学学生科学素养测评系统</h1>
             <p>通过科学的测评方法，全面评估我校学生的科学素养水平</p>
         </header>
 
-        <nav>
+        <nav style="display: none;">
             <ul>
                 <li><a href="#student-info" class="active">学生信息</a></li>
                 <li><a href="#test">科学素养测试</a></li>
@@ -27,7 +58,7 @@
 
         <main>
             <!-- 学生信息 -->
-            <section id="student-info">
+            <section id="student-info" style="display: none;">
                 <h2>学生基本信息</h2>
                 <div class="student-form">
                     <div class="form-group">
@@ -114,41 +145,47 @@
                         <h3>综合测评结果</h3>
                         <div class="score-display">
                             <div class="score-item">
-                                <label>综合得分</label>
-                                <span id="comprehensive-score">0.00</span>
+                                <label>综合得分：</label>
+                                <span id="comprehensive-score">--</span>
                             </div>
                             <div class="score-item">
-                                <label>测评等级</label>
+                                <label>等级：</label>
                                 <span id="score-grade">--</span>
                             </div>
                             <div class="score-item">
-                                <label>等级描述</label>
+                                <label>评价：</label>
                                 <span id="score-description">--</span>
                             </div>
                         </div>
                     </div>
 
-                    <div class="visualization">
-                        <h3>各维度素养雷达图</h3>
-                        <div class="chart-container">
-                            <canvas id="radar-chart" width="400" height="400"></canvas>
-                        </div>
-                    </div>
-
                     <div class="detailed-results">
-                        <h3>详细测评结果</h3>
-                        <table id="detailed-table">
-                            <thead>
-                                <tr>
-                                    <th>测评维度</th>
-                                    <th>得分</th>
-                                    <th>等级</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- 动态生成的表格内容 -->
-                            </tbody>
-                        </table>
+                        <h3>各维度详细结果</h3>
+                        <div class="dimension-results">
+                            <div class="dimension-item">
+                                <label>科学知识：</label>
+                                <span id="science-knowledge-score">--</span>
+                                <span id="science-knowledge-grade">--</span>
+                            </div>
+                            <div class="dimension-item">
+                                <label>科学探究能力：</label>
+                                <span id="inquiry-ability-score">--</span>
+                                <span id="inquiry-ability-grade">--</span>
+                            </div>
+                            <div class="dimension-item">
+                                <label>科学态度与情感：</label>
+                                <span id="attitude-emotion-score">--</span>
+                                <span id="attitude-emotion-grade">--</span>
+                            </div>
+                            <div class="dimension-item">
+                                <label>科学、技术与社会的关系：</label>
+                                <span id="sts-relation-score">--</span>
+                                <span id="sts-relation-grade">--</span>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="radar-chart" width="400" height="300"></canvas>
+                        </div>
                     </div>
 
                     <div class="analysis-report">
@@ -168,22 +205,30 @@
                 <h2>后台管理</h2>
                 <div class="admin-container">
                     <!-- 管理员登录 -->
-                    <div id="admin-login" class="admin-section">
+                    <div id="admin-login" class="admin-section" style="display: none;">
                         <h3>管理员登录</h3>
-                        <div class="login-form">
+                        <form id="admin-login-form" class="login-form">
                             <div class="form-group">
                                 <label for="admin-username">用户名</label>
                                 <input type="text" id="admin-username" placeholder="请输入用户名">
                             </div>
                             <div class="form-group">
-                                <label for="admin-password">密码</label>
-                                <input type="password" id="admin-password" placeholder="请输入密码">
+                                <label for="admin-dashboard-password">密码</label>
+                                <div class="password-input-container">
+                                    <input type="password" id="admin-dashboard-password" placeholder="请输入密码">
+                                    <button type="button" id="toggle-dashboard-password-btn" class="toggle-password-btn">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                             <div class="form-group">
-                                <button id="login-btn" class="btn btn-primary">登录</button>
+                                <button type="submit" id="admin-login-btn" class="btn btn-primary">登录</button>
                                 <button id="forgot-password-btn" class="btn btn-link">忘记密码？</button>
                             </div>
-                        </div>
+                        </form>
                     </div>
 
                     <!-- 管理员控制台 -->
@@ -206,12 +251,15 @@
                                 <button id="import-data-btn" class="btn btn-sm btn-success">导入数据</button>
                                 <input type="file" id="data-file-input" accept=".json" style="display: none;">
                                 <button id="export-data-btn" class="btn btn-sm btn-primary" style="margin-left: 10px;">导出数据</button>
+                                <button id="sync-data-btn" class="btn btn-sm btn-info" style="margin-left: 10px;">同步数据</button>
                                 <button id="clear-data-btn" class="btn btn-sm btn-warning" style="margin-left: 10px;">清空数据</button>
+                                <button id="generate-student-analysis-btn" class="btn btn-sm btn-info" style="margin-left: 10px;">生成分析报告</button>
                             </div>
                             <div class="data-table-container">
                                 <table id="admin-data-table">
                                     <thead>
                                         <tr>
+                                            <th><input type="checkbox" id="select-all-checkbox"></th>
                                             <th>姓名</th>
                                             <th>年级</th>
                                             <th>班级</th>
@@ -255,7 +303,8 @@
                                 </div>
                                 <div class="form-group">
                                     <button id="generate-analysis-btn" class="btn btn-primary">生成分析报告</button>
-                                    <button id="download-analysis-btn" class="btn" style="margin-left: 10px;">下载分析报告</button>
+                                    <button id="download-word-btn" class="btn btn-info" style="margin-left: 10px;">下载Word</button>
+                                    <button id="download-pdf-btn" class="btn btn-success" style="margin-left: 10px;">下载PDF</button>
                                 </div>
                             </div>
                             
@@ -292,6 +341,7 @@
                             </div>
                             <div class="chart-container">
                                 <canvas id="grade-distribution-chart" width="400" height="300"></canvas>
+                                <canvas id="radar-chart" width="400" height="300"></canvas>
                             </div>
                         </div>
 
