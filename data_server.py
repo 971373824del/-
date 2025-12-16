@@ -23,7 +23,7 @@ class DataHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-type", content_type)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
@@ -109,6 +109,30 @@ class DataHandler(http.server.BaseHTTPRequestHandler):
             
             self._set_headers()
             self.wfile.write(json.dumps({"success": True, "message": "数据删除成功"}, ensure_ascii=False).encode('utf-8'))
+            
+        except json.JSONDecodeError:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": False, "message": "JSON格式错误"}, ensure_ascii=False).encode('utf-8'))
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": False, "message": str(e)}, ensure_ascii=False).encode('utf-8'))
+
+    def do_PUT(self):
+        """更新所有学生数据"""
+        content_length = int(self.headers['Content-Length'])
+        put_data = self.rfile.read(content_length)
+        
+        try:
+            all_student_data = json.loads(put_data.decode('utf-8'))
+            
+            # 保存所有数据
+            with open(DATA_FILE, 'w', encoding='utf-8') as f:
+                json.dump(all_student_data, f, ensure_ascii=False, indent=2)
+            
+            self._set_headers()
+            self.wfile.write(json.dumps({"success": True, "message": "所有数据更新成功"}, ensure_ascii=False).encode('utf-8'))
             
         except json.JSONDecodeError:
             self.send_response(400)

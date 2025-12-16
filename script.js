@@ -350,7 +350,6 @@ class ScientificLiteracyEvaluation {
         this.bindEvents();
         this.loadStudentData();
         this.loadAdminData();
-        this.setDefaultDate();
     }
 
     bindEvents() {
@@ -754,6 +753,18 @@ class ScientificLiteracyEvaluation {
         }
     }
 
+    // 保存所有学生数据到服务器
+    async saveAllStudentData(allResults) {
+        const result = await this.sendRequest('http://localhost:8002', 'PUT', allResults);
+        if (result && result.success) {
+            return true;
+        } else {
+            // 服务器保存失败时，回退到localStorage
+            localStorage.setItem('studentResults', JSON.stringify(allResults));
+            return false;
+        }
+    }
+
     // 删除学生数据
     async deleteStudentData(index) {
         const allResults = await this.getAllStudentData();
@@ -1026,7 +1037,9 @@ class ScientificLiteracyEvaluation {
                 <td>${result.name}</td>
                 <td>${result.grade}年级</td>
                 <td>${result.className}</td>
-                <td>${result.testDate}</td>
+                <td>
+                    <input type="date" value="${result.testDate}" class="date-input" onchange="evaluation.updateStudentTestDate(${index}, this.value)">
+                </td>
                 <td>${result.results.comprehensiveScore}</td>
                 <td style="color: ${result.results.comprehensiveGrade.color};">${result.results.comprehensiveGrade.grade}</td>
                 <td>
@@ -1036,6 +1049,29 @@ class ScientificLiteracyEvaluation {
             `;
             tableBody.appendChild(row);
         });
+    }
+
+    async updateStudentTestDate(index, newDate) {
+        try {
+            let allResults = await this.getAllStudentData();
+            
+            if (index >= 0 && index < allResults.length) {
+                // 更新本地数据
+                allResults[index].testDate = newDate;
+                
+                // 保存到服务器
+                await this.saveAllStudentData(allResults);
+                
+                // 重新加载表格以确保显示最新数据
+                await this.loadStudentDataTable();
+                
+                // 显示成功提示
+                this.showNotification('测评日期修改成功', 'success');
+            }
+        } catch (error) {
+            console.error('修改测评日期失败:', error);
+            this.showNotification('修改测评日期失败，请重试', 'error');
+        }
     }
 
     async showStudentReport(index) {
@@ -1418,7 +1454,15 @@ class ScientificLiteracyEvaluation {
             document.getElementById('student-name').value = this.currentStudent.name;
             document.getElementById('student-grade').value = this.currentStudent.grade;
             document.getElementById('student-class').value = this.currentStudent.className;
-            document.getElementById('test-date').value = this.currentStudent.testDate;
+            if (this.currentStudent.testDate) {
+                document.getElementById('test-date').value = this.currentStudent.testDate;
+            } else {
+                // 如果没有保存的日期，才设置默认日期
+                this.setDefaultDate();
+            }
+        } else {
+            // 如果没有保存的学生信息，设置默认日期
+            this.setDefaultDate();
         }
     }
 

@@ -193,6 +193,22 @@ table tr:hover {
     background-color: #f8f9fa;
 }
 
+/* 表格中的日期输入框样式 */
+.date-input {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    width: 100%;
+    max-width: 120px;
+}
+
+.date-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
 /* 结果展示样式 */
 #comprehensive-score {
     font-size: 3rem;
